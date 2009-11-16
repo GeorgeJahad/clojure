@@ -4243,19 +4243,8 @@ public static class LetExpr implements Expr{
 		Label endTry = gen.newLabel();
 		Label end = gen.newLabel();
 		Label finallyLabel = gen.newLabel();
-			BindingInit bi = (BindingInit) bindingInits.nth(0);
-			fn.emitValue(bi.binding.sym,gen);
-			Class primc = maybePrimitiveType(bi.init);
-			if(primc != null)
-				{
-				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
-				}
-			else
-				{
-				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), bi.binding.idx);
-				}
-
-		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushGbjLoc(clojure.lang.Symbol,Object)"));
+		emitBindingsAsObjectArray(fn,gen);
+		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushGbjLoc(Object[])"));
 		gen.mark(startTry);
 		body.emit(context, fn, gen);
 		gen.mark(endTry);
@@ -4287,6 +4276,34 @@ public static class LetExpr implements Expr{
 			else
 				gen.visitLocalVariable(lname, "Ljava/lang/Object;", null, loopLabel, end, bi.binding.idx);
 			}
+	}
+
+  void emitBindingsAsObjectArray(FnExpr fn, GeneratorAdapter gen){
+		gen.push(2 * bindingInits.size());
+		gen.newArray(OBJECT_TYPE);
+
+		for(int i = 0; i < bindingInits.count(); i++)
+		{
+			BindingInit bi = (BindingInit) bindingInits.nth(i);
+			gen.dup();
+			gen.push(2*i);
+			fn.emitValue(bi.binding.sym,gen);
+			gen.arrayStore(OBJECT_TYPE);
+
+			gen.dup();
+			gen.push(2*i +1);
+			Class primc = maybePrimitiveType(bi.init);
+			if(primc != null)
+				{
+				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				}
+			else
+				{
+				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				}
+			gen.arrayStore(OBJECT_TYPE);
+		}
+
 	}
 
 	public boolean hasJavaClass() throws Exception{
@@ -5057,11 +5074,10 @@ public static void pushNS(){
 	                                                           Symbol.create("*ns*")), null));
 }
 
-  public static void pushGbjLoc(Symbol sym, Object val){
- System.out.println("got to gbjloc " + sym);
+  public static void pushGbjLoc(Object[] keyvals){
   	Var.pushThreadBindings(PersistentHashMap.create(Var.intern(Symbol.create("clojure.core"),
                                                              Symbol.create("*gbj*")), 
-							PersistentHashMap.create(sym,val)));
+							PersistentHashMap.create(keyvals)));
 
 
   //Var.intern(Symbol.create("clojure.core"), Symbol.create("*gbj*"));
