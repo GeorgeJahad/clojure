@@ -182,11 +182,9 @@ static final public Var IN_CATCH_FINALLY = Var.create(null);
 static final public Var LOADER = Var.create();
 
 
-static final public Var gbj = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-                                            Symbol.create("*gbj*"), "gbj_FILE");
+static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
+                                            Symbol.create("*lexical-frames*"), PersistentVector.EMPTY);
 
-static final public Var gbj2 = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-                                            Symbol.create("*gbj2*"), "gbj_FILE2");
 
 //String
 static final public Var SOURCE = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
@@ -4244,7 +4242,7 @@ public static class LetExpr implements Expr{
 		Label end = gen.newLabel();
 		Label finallyLabel = gen.newLabel();
 		emitBindingsAsObjectArray(fn,gen);
-		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushGbjLoc(Object[])"));
+		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[])"));
 		gen.mark(startTry);
 		body.emit(context, fn, gen);
 		gen.mark(endTry);
@@ -5074,13 +5072,8 @@ public static void pushNS(){
 	                                                           Symbol.create("*ns*")), null));
 }
 
-  public static void pushGbjLoc(Object[] keyvals){
-  	Var.pushThreadBindings(PersistentHashMap.create(Var.intern(Symbol.create("clojure.core"),
-                                                             Symbol.create("*gbj*")), 
-							PersistentHashMap.create(keyvals)));
-
-
-  //Var.intern(Symbol.create("clojure.core"), Symbol.create("*gbj*"));
+  public static void pushLexicalFrames(Object[] keyvals){
+    Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,PersistentHashMap.create(keyvals)));
 }
 
 static void compile1(GeneratorAdapter gen, FnExpr fn, Object form) throws Exception{
