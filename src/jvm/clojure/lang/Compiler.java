@@ -3803,7 +3803,8 @@ public static class FnMethod{
 		try
 			{
 			Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel, METHOD, this));
-			body.emit(C.RETURN, fn, gen);
+			if (!lexicalFrames(argLocals,body,C.RETURN,fn,gen,true))
+			  body.emit(C.RETURN, fn, gen);
 			Label end = gen.mark();
 			gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
 			for(ISeq lbs = argLocals.seq(); lbs != null; lbs = lbs.next())
@@ -4227,36 +4228,15 @@ public static class LetExpr implements Expr{
 			try
 				{
 				Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel));
-				body.emit(context, fn, gen);
+				if (!lexicalFrames(bindingInits,body,context,fn,gen,false))
+				  body.emit(context, fn, gen);
 				}
 			finally
 				{
 				Var.popThreadBindings();
 				}
 			}
-		else if (bindingInits.count() > 0)
-		  {
-		Label startTry = gen.newLabel();
-		Label endTry = gen.newLabel();
-		Label end = gen.newLabel();
-		Label finallyLabel = gen.newLabel();
-		emitBindingsAsObjectArray(fn,gen);
-		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[])"));
-		gen.mark(startTry);
-		body.emit(context, fn, gen);
-		gen.mark(endTry);
-		gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
-		gen.goTo(end);
-
-		gen.mark(finallyLabel);
-		//exception should be on stack
-		gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
-		gen.throwException();
-		gen.mark(end);
-		gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
-		  }
-
-		else
+		else if (!lexicalFrames(bindingInits,body,context,fn,gen,false))
 			body.emit(context, fn, gen);
 		Label end = gen.mark();
 //		gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
@@ -4275,34 +4255,7 @@ public static class LetExpr implements Expr{
 			}
 	}
 
-  void emitBindingsAsObjectArray(FnExpr fn, GeneratorAdapter gen){
-		gen.push(2 * bindingInits.size());
-		gen.newArray(OBJECT_TYPE);
 
-		for(int i = 0; i < bindingInits.count(); i++)
-		{
-			BindingInit bi = (BindingInit) bindingInits.nth(i);
-			gen.dup();
-			gen.push(2*i);
-			fn.emitValue(bi.binding.sym,gen);
-			gen.arrayStore(OBJECT_TYPE);
-
-			gen.dup();
-			gen.push(2*i +1);
-			Class primc = maybePrimitiveType(bi.init);
-			if(primc != null)
-				{
-				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
-				HostExpr.emitBoxReturn(fn, gen, primc);
-				}
-			else
-				{
-				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), bi.binding.idx);
-				}
-			gen.arrayStore(OBJECT_TYPE);
-		}
-
-	}
 
 	public boolean hasJavaClass() throws Exception{
 		return body.hasJavaClass();
@@ -4749,6 +4702,8 @@ private static KeywordExpr registerKeyword(Keyword keyword){
 
 private static Expr analyzeSymbol(Symbol sym) throws Exception{
 	Symbol tag = tagOf(sym);
+	if ((sym.name.equals("v2?")) || (sym.name.equals("gbjfn")))
+	    gbjSym();
 	if(sym.ns == null) //ns-qualified syms are always Vars
 		{
 		LocalBinding b = referenceLocal(sym);
@@ -5217,4 +5172,88 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 	return ret;
 }
 
+  static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
+			       boolean args){
+
+    if (bindingInits.count() > 0)
+      {
+	Label startTry = gen.newLabel();
+	Label endTry = gen.newLabel();
+	Label end = gen.newLabel();
+	Label finallyLabel = gen.newLabel();
+	if (args)
+	  emitArgsAsObjectArray(bindingInits,fn,gen);
+	else
+	  emitBindingsAsObjectArray(bindingInits,fn,gen);
+	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[])"));
+	gen.mark(startTry);
+	body.emit(context, fn, gen);
+	gen.mark(endTry);
+	gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
+	gen.goTo(end);
+	
+	gen.mark(finallyLabel);
+	//exception should be on stack
+	gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
+	gen.throwException();
+	gen.mark(end);
+	gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
+	return true;
+      }
+    return false;
+  }
+
+  static void emitArgsAsObjectArray(PersistentVector argLocals, FnExpr fn, GeneratorAdapter gen){
+		gen.push(2 * argLocals.size());
+		gen.newArray(OBJECT_TYPE);
+
+		for(int i = 0; i < argLocals.count(); i++)
+		{
+			LocalBinding lb = (LocalBinding) argLocals.nth(i);
+			gen.dup();
+			gen.push(2*i);
+			fn.emitValue(lb.sym,gen);
+			gen.arrayStore(OBJECT_TYPE);
+
+			gen.dup();
+			gen.push(2*i +1);
+			gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), lb.idx);
+			gen.arrayStore(OBJECT_TYPE);
+		}
+
+	}
+
+  static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, GeneratorAdapter gen){
+		gen.push(2 * bindingInits.size());
+		gen.newArray(OBJECT_TYPE);
+
+		for(int i = 0; i < bindingInits.count(); i++)
+		{
+			BindingInit bi = (BindingInit) bindingInits.nth(i);
+			gen.dup();
+			gen.push(2*i);
+			fn.emitValue(bi.binding.sym,gen);
+			gen.arrayStore(OBJECT_TYPE);
+
+			gen.dup();
+			gen.push(2*i +1);
+			Class primc = maybePrimitiveType(bi.init);
+			if(primc != null)
+				{
+				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				HostExpr.emitBoxReturn(fn, gen, primc);
+				}
+			else
+				{
+				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				}
+			gen.arrayStore(OBJECT_TYPE);
+		}
+
+	}
+
+ static void gbjSym()
+ {
+   System.out.println("gbjsym");
+ }
 }
