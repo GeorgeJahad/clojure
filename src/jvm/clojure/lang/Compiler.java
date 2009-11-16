@@ -5073,7 +5073,8 @@ public static void pushNS(){
 }
 
   public static void pushLexicalFrames(Object[] keyvals){
-    Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,PersistentHashMap.create(keyvals)));
+    Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
+						    ((PersistentVector) RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),(PersistentHashMap.create(keyvals))))));
 }
 
 static void compile1(GeneratorAdapter gen, FnExpr fn, Object form) throws Exception{
