@@ -154,7 +154,6 @@ static
 
 
 //symbol->localbinding
-
 static final public Var LOCAL_ENV = Var.create(null);
 
 //vector<localbinding>
@@ -4294,6 +4293,7 @@ public static class LetExpr implements Expr{
 			if(primc != null)
 				{
 				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				HostExpr.emitBoxReturn(fn, gen, primc);
 				}
 			else
 				{
