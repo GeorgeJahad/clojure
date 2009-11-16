@@ -154,6 +154,7 @@ static
 
 
 //symbol->localbinding
+
 static final public Var LOCAL_ENV = Var.create(null);
 
 //vector<localbinding>
@@ -179,6 +180,13 @@ static final public Var IN_CATCH_FINALLY = Var.create(null);
 
 //DynamicClassLoader
 static final public Var LOADER = Var.create();
+
+
+static final public Var gbj = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
+                                            Symbol.create("*gbj*"), "gbj_FILE");
+
+static final public Var gbj2 = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
+                                            Symbol.create("*gbj2*"), "gbj_FILE2");
 
 //String
 static final public Var SOURCE = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
@@ -4229,6 +4237,39 @@ public static class LetExpr implements Expr{
 				Var.popThreadBindings();
 				}
 			}
+		else if (bindingInits.count() > 0)
+		  {
+		Label startTry = gen.newLabel();
+		Label endTry = gen.newLabel();
+		Label end = gen.newLabel();
+		Label finallyLabel = gen.newLabel();
+			BindingInit bi = (BindingInit) bindingInits.nth(0);
+			fn.emitValue(bi.binding.sym,gen);
+			Class primc = maybePrimitiveType(bi.init);
+			if(primc != null)
+				{
+				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				}
+			else
+				{
+				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), bi.binding.idx);
+				}
+
+		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushGbjLoc(clojure.lang.Symbol,Object)"));
+		gen.mark(startTry);
+		body.emit(context, fn, gen);
+		gen.mark(endTry);
+		gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
+		gen.goTo(end);
+
+		gen.mark(finallyLabel);
+		//exception should be on stack
+		gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
+		gen.throwException();
+		gen.mark(end);
+		gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
+		  }
+
 		else
 			body.emit(context, fn, gen);
 		Label end = gen.mark();
@@ -5014,6 +5055,16 @@ static public void writeClassFile(String internalName, byte[] bytecode) throws E
 public static void pushNS(){
 	Var.pushThreadBindings(PersistentHashMap.create(Var.intern(Symbol.create("clojure.core"),
 	                                                           Symbol.create("*ns*")), null));
+}
+
+  public static void pushGbjLoc(Symbol sym, Object val){
+ System.out.println("got to gbjloc " + sym);
+  	Var.pushThreadBindings(PersistentHashMap.create(Var.intern(Symbol.create("clojure.core"),
+                                                             Symbol.create("*gbj*")), 
+							PersistentHashMap.create(sym,val)));
+
+
+  //Var.intern(Symbol.create("clojure.core"), Symbol.create("*gbj*"));
 }
 
 static void compile1(GeneratorAdapter gen, FnExpr fn, Object form) throws Exception{
