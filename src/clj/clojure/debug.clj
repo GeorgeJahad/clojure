@@ -32,30 +32,11 @@
          (finally (pop-thread-bindings))))
      (finally (pop-thread-bindings)))))
 
-(defmacro gen-eval-with-context [context]
-  (do
-    ;;eval??
-    (push-thread-bindings (eval context))
-    (try
-     `(do
-        (push-thread-bindings ~context)
-        (try
-         (fn [form#]
-           (eval
-            (let [~@(make-let-bindings)]
-              form#)))
-         (finally (pop-thread-bindings))))
-     (finally (pop-thread-bindings)))))
-
 (def context-var nil)
 
 (defn eval-with-context-fn [context form]
-  (do
-    (alter-var-root #'clojure.debug/context-var
-                    (fn [c d] d)  context)
+  (binding [context-var context]
     (let [ret (eval `(eval-with-context context-var ~form))]
-      (alter-var-root #'clojure.debug/context-var
-                      (fn [c d] d)  nil)
       ret)))
 
 (defmacro debug-repl [context]
