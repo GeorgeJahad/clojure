@@ -180,6 +180,8 @@ static final public Var IN_CATCH_FINALLY = Var.create(null);
 //DynamicClassLoader
 static final public Var LOADER = Var.create();
 
+static final public Var CREATE_LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
+							   Symbol.create("*create-lexical-frames*"), false);
 
 static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
                                             Symbol.create("*lexical-frames*"), PersistentVector.EMPTY);
@@ -5175,7 +5177,7 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
   static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
 			       boolean args){
 
-    if (bindingInits.count() > 0)
+    if ((Boolean)CREATE_LEXICAL_FRAMES.deref() && (bindingInits.count() > 0))
       {
 	Label startTry = gen.newLabel();
 	Label endTry = gen.newLabel();
