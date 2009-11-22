@@ -56,13 +56,12 @@
                     (fn [c d] d)  context)
     (alter-var-root #'clojure.debug/form-var
                     (fn [c d] d)  form)
-    (println "c f" context-var form-var)
-    (println (user/macroexpand-r `(eval-with-context context-var ~form-var)))
-    (eval (eval `(eval-with-context context-var ~form-var)))
-    (alter-var-root #'clojure.debug/form-var
-                    (fn [c d] d)  nil)
-    (alter-var-root #'clojure.debug/context-var
-                    (fn [c d] d)  nil)))
+    (let [ret (eval (eval `(eval-with-context context-var ~form-var)))]
+      (alter-var-root #'clojure.debug/form-var
+                      (fn [c d] d)  nil)
+      (alter-var-root #'clojure.debug/context-var
+                      (fn [c d] d)  nil)
+      ret)))
 
 (defmacro debug-repl [context form]
   (clojure.main/repl :eval  ))
