@@ -53,10 +53,10 @@
   (do
     (alter-var-root #'clojure.debug/context-var
                     (fn [c d] d)  context)
-    (let [ret (eval (eval `(eval-with-context context-var ~form)))]
+    (let [ret (eval `(eval-with-context context-var ~form))]
       (alter-var-root #'clojure.debug/context-var
                       (fn [c d] d)  nil)
       ret)))
 
 (defmacro debug-repl [context]
-  `(clojure.main/repl :prompt #(println "hi george") :eval (partial eval-with-context-fn ~context)))
+  `(clojure.main/repl :prompt #(print "dr => ") :eval (partial eval-with-context-fn ~context)))
