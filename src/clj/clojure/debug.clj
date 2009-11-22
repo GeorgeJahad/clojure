@@ -48,20 +48,15 @@
      (finally (pop-thread-bindings)))))
 
 (def context-var nil)
-(def form-var nil)
 
 (defn eval-with-context-fn [context form]
   (do
     (alter-var-root #'clojure.debug/context-var
                     (fn [c d] d)  context)
-    (alter-var-root #'clojure.debug/form-var
-                    (fn [c d] d)  form)
-    (let [ret (eval (eval `(eval-with-context context-var ~form-var)))]
-      (alter-var-root #'clojure.debug/form-var
-                      (fn [c d] d)  nil)
+    (let [ret (eval (eval `(eval-with-context context-var ~form)))]
       (alter-var-root #'clojure.debug/context-var
                       (fn [c d] d)  nil)
       ret)))
 
-(defmacro debug-repl [context form]
-  (clojure.main/repl :eval  ))
+(defmacro debug-repl [context]
+  `(clojure.main/repl :prompt #(println "hi george") :eval (partial eval-with-context-fn ~context)))
