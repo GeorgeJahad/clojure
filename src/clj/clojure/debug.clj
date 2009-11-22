@@ -1,10 +1,14 @@
 (ns clojure.debug)
 
 (defmacro defn-debug
-  "Just like defn, but memoizes the function using clojure.core/memoize"
+  "Just like defn, but turns on lexical frame creation"
   [fn-name & defn-stuff]
-  `(binding [clojure.core/*create-lexical-frames* true]
-     (defn ~fn-name ~@defn-stuff)))
+  `(do
+     (alter-var-root #'clojure.core/*create-lexical-frames*
+                     (fn [~'c ~'d] ~'d)  true)
+     (defn ~fn-name ~@defn-stuff)
+     (alter-var-root #'clojure.core/*create-lexical-frames*
+                     (fn [~'c ~'d] ~'d) false)))
 
 (defmacro get-context [context]
   `(def ~context (get-thread-bindings)))
