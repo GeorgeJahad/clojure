@@ -1,14 +1,24 @@
 (ns clojure.debug
   (:require clojure.main))
 
+
+;; dynamic bindings don't seem to work at compile time so I had to use
+;; alter-var-root.  with-alter-var-root doesn't work because it is
+;; nested in one big let block and compiler granularity requires
+;; it to be in a "do" block
+
+(defn alter-helper [a b] b)
+
 (defmacro defn-debug
   "Like defn, but turns on lexical frame creation"
   [fn-name & defn-stuff]
   `(do
-     (push-thread-bindings {#'clojure.core/*create-lexical-frames* true})
+     (alter-var-root #'clojure.core/*create-lexical-frames* alter-helper true)
      (try
       (defn ~fn-name ~@defn-stuff)
-      (finally (pop-thread-bindings)))))
+      (finally
+       (alter-var-root #'clojure.core/*create-lexical-frames*
+                       alter-helper false)))))
 
 (defmacro get-context [context]
   `(def ~context (get-thread-bindings)))
@@ -40,4 +50,5 @@
       ret)))
 
 (defmacro debug-repl [context]
-  `(clojure.main/repl :prompt #(print "dr => ") :eval (partial eval-with-context-fn ~context)))
+  `(clojure.main/repl :prompt #(print "dr => ")
+                      :eval (partial eval-with-context-fn ~context)))
