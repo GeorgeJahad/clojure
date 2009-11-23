@@ -20,6 +20,17 @@
        (alter-var-root #'clojure.core/*create-lexical-frames*
                        alter-helper false)))))
 
+(defmacro debug-bindings
+  "Turns on lexical frame creation"
+  [& body]
+  `(do
+     (alter-var-root #'clojure.core/*create-lexical-frames* alter-helper true)
+     (try
+      ~@body
+      (finally
+       (alter-var-root #'clojure.core/*create-lexical-frames*
+                       alter-helper false)))))
+
 (defmacro get-context [context]
   `(def ~context (get-thread-bindings)))
 
