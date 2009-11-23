@@ -36,8 +36,8 @@
 
 (defn make-let-bindings []
   (apply concat
-         (for [[sym val] (apply merge {} clojure.core/*lexical-frames*)]
-           [sym val])))
+         (for [[sym]  (apply merge {} clojure.core/*lexical-frames*)]
+           [sym `(get ~'lex-bindings (quote ~sym))])))
 
 (defmacro eval-with-context [context form]
   (do
@@ -48,8 +48,9 @@
         (push-thread-bindings ~context)
         (try
          (eval
-          (let [~@(make-let-bindings)]
-            ~form))
+          '(let [~'lex-bindings (apply merge {} clojure.core/*lexical-frames*)]
+              (let [~@(make-let-bindings)]
+                ~form)))
          (finally (pop-thread-bindings))))
      (finally (pop-thread-bindings)))))
 
