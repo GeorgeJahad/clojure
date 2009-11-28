@@ -42,8 +42,8 @@
 (defmacro get-context [context]
   `(def ~context (get-thread-bindings)))
 
-(defn make-let-bindings []
-  (mapcat #(vector % `(~'lex-bindings '~%))
+(defn make-let-bindings [lex-bindings]
+  (mapcat #(vector % `(~lex-bindings '~%))
           (keys (into {} clojure.core/*lexical-frames*))))
 
 (defmacro eval-with-context [context form]
@@ -51,14 +51,15 @@
     ;;eval??
     (push-thread-bindings (eval context))
     (try
-     `(do
-        (push-thread-bindings ~context)
-        (try
-         (eval
-          '(let [~'lex-bindings (into {} clojure.core/*lexical-frames*)]
-              (let [~@(make-let-bindings)]
-                ~form)))
-         (finally (pop-thread-bindings))))
+     (let [lex-bindings (gensym)]
+       `(do
+          (push-thread-bindings ~context)
+          (try
+           (eval
+            '(let [~lex-bindings (into {} clojure.core/*lexical-frames*)]
+               (let [~@(make-let-bindings lex-bindings)]
+                 ~form)))
+           (finally (pop-thread-bindings)))))
      (finally (pop-thread-bindings)))))
 
 (def context-var nil)
