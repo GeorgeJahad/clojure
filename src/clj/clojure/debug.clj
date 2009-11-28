@@ -47,20 +47,15 @@
           (keys (into {} clojure.core/*lexical-frames*))))
 
 (defmacro eval-with-context [context form]
-  (do
-    ;;eval??
-    (push-thread-bindings (eval context))
-    (try
-     (let [lex-bindings (gensym)]
-       `(do
-          (push-thread-bindings ~context)
-          (try
-           (eval
-            '(let [~lex-bindings (into {} clojure.core/*lexical-frames*)]
-               (let [~@(make-let-bindings lex-bindings)]
-                 ~form)))
-           (finally (pop-thread-bindings)))))
-     (finally (pop-thread-bindings)))))
+  (let  [lex-bindings (gensym)]
+    `(do
+       (push-thread-bindings ~context)
+       (try
+        (eval
+         '(let [~lex-bindings (into {} clojure.core/*lexical-frames*)]
+            (let [~@(make-let-bindings lex-bindings)]
+              ~form)))
+        (finally (pop-thread-bindings))))))
 
 (def context-var nil)
 
