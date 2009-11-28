@@ -32,12 +32,12 @@
 (defmacro defn-debug
   [fn-name & defn-stuff]
   `(with-lexical-frames
-    (defn ~fn-name ~@defn-stuff)))
+     (defn ~fn-name ~@defn-stuff)))
 
 (defmacro deftest-debug
   [test-name & deftest-stuff]
   `(with-lexical-frames
-    (deftest ~test-name ~@deftest-stuff)))
+     (deftest ~test-name ~@deftest-stuff)))
 
 (defmacro get-context [context]
   `(def ~context (get-thread-bindings)))
@@ -48,7 +48,12 @@
 
 (defmacro eval-with-context [context form]
   (let  [lex-bindings (gensym)]
-    `(do
+    ;; don't use "do" with push-thread-bindings, because "do" causes
+    ;;  each sub form to be eval'd separately, with
+    ;;  pop-thread-bindings after each, causing unbalanced push/pops.
+    ;;  Use "(let [])" instead, as that causes all the sub-forms to be
+    ;;  eval'd together with no itermediate pops
+    `(let []
        (push-thread-bindings ~context)
        (try
         (eval
