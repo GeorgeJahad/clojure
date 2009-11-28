@@ -43,9 +43,8 @@
   `(def ~context (get-thread-bindings)))
 
 (defn make-let-bindings []
-  (apply concat
-         (for [[sym]  (into {} clojure.core/*lexical-frames*)]
-           [sym `(~'lex-bindings  '~sym)])))
+  (mapcat #(vector % `(~'lex-bindings '~%))
+          (keys (into {} clojure.core/*lexical-frames*))))
 
 (defmacro eval-with-context [context form]
   (do
