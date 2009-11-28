@@ -62,12 +62,9 @@
               ~form)))
         (finally (pop-thread-bindings))))))
 
-(def context-var nil)
-
 (defn eval-with-context-fn [context form]
-  (binding [context-var context]
-    (eval `(eval-with-context context-var ~form))))
+  (eval `(eval-with-context ~context ~form)))
 
 (defmacro debug-repl [context]
   `(clojure.main/repl :prompt #(print "dr => ")
-                      :eval (partial eval-with-context-fn ~context)))
+                      :eval (partial eval-with-context-fn '~context)))
