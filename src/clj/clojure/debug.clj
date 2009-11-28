@@ -18,18 +18,7 @@
 
 (defn alter-helper [a b] b)
 
-(defmacro defn-debug
-  "Like defn, but turns on lexical frame creation"
-  [fn-name & defn-stuff]
-  `(do
-     (alter-var-root #'clojure.core/*create-lexical-frames* alter-helper true)
-     (try
-      (defn ~fn-name ~@defn-stuff)
-      (finally
-       (alter-var-root #'clojure.core/*create-lexical-frames*
-                       alter-helper false)))))
-
-(defmacro debug-bindings
+(defmacro with-lexical-frames
   "Turns on lexical frame creation"
   [& body]
   `(do
@@ -40,13 +29,23 @@
        (alter-var-root #'clojure.core/*create-lexical-frames*
                        alter-helper false)))))
 
+(defmacro defn-debug
+  [fn-name & defn-stuff]
+  `(with-lexical-frames
+    (defn ~fn-name ~@defn-stuff)))
+
+(defmacro deftest-debug
+  [test-name & deftest-stuff]
+  `(with-lexical-frames
+    (deftest ~test-name ~@deftest-stuff)))
+
 (defmacro get-context [context]
   `(def ~context (get-thread-bindings)))
 
 (defn make-let-bindings []
   (apply concat
-         (for [[sym]  (apply merge {} clojure.core/*lexical-frames*)]
-           [sym `(get ~'lex-bindings (quote ~sym))])))
+         (for [[sym]  (into {} clojure.core/*lexical-frames*)]
+           [sym `(~'lex-bindings  '~sym)])))
 
 (defmacro eval-with-context [context form]
   (do
@@ -57,7 +56,7 @@
         (push-thread-bindings ~context)
         (try
          (eval
-          '(let [~'lex-bindings (apply merge {} clojure.core/*lexical-frames*)]
+          '(let [~'lex-bindings (into {} clojure.core/*lexical-frames*)]
               (let [~@(make-let-bindings)]
                 ~form)))
          (finally (pop-thread-bindings))))
@@ -67,8 +66,7 @@
 
 (defn eval-with-context-fn [context form]
   (binding [context-var context]
-    (let [ret (eval `(eval-with-context context-var ~form))]
-      ret)))
+    (eval `(eval-with-context context-var ~form))))
 
 (defmacro debug-repl [context]
   `(clojure.main/repl :prompt #(print "dr => ")
