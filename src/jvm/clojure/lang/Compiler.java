@@ -5177,7 +5177,8 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
   static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
 			       boolean args){
 
-    if ((Boolean)CREATE_LEXICAL_FRAMES.deref() && (bindingInits.count() > 0))
+    if ((Boolean)CREATE_LEXICAL_FRAMES.deref() && 
+	((bindingInits.count() > 0) || fn.closes().count() > 0))
       {
 	Label startTry = gen.newLabel();
 	Label endTry = gen.newLabel();
@@ -5206,10 +5207,10 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
   }
 
   static void emitArgsAsObjectArray(PersistentVector argLocals, FnExpr fn, GeneratorAdapter gen){
-		gen.push(2 * argLocals.size());
+                gen.push(2 * (argLocals.size() +fn.closes().count()));
 		gen.newArray(OBJECT_TYPE);
-
-		for(int i = 0; i < argLocals.count(); i++)
+		int i = 0;
+		for(; i < argLocals.count(); i++)
 		{
 			LocalBinding lb = (LocalBinding) argLocals.nth(i);
 			gen.dup();
@@ -5223,7 +5224,24 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 			gen.arrayStore(OBJECT_TYPE);
 		}
 
-	}
+		int j = 0;
+		for(ISeq s = RT.keys(fn.closes); s != null; s = s.next(),j++)
+		  {
+
+		    LocalBinding lb = (LocalBinding) s.first();
+		    System.out.println("gbj sym " + lb.sym + " " + fn.fntype());
+		    gen.dup();
+		    gen.push(2*(i + j));
+		    fn.emitValue(lb.sym,gen);
+		    gen.arrayStore(OBJECT_TYPE);
+		    
+		    gen.dup();
+		    gen.push(2*(i + j) + 1);
+		    fn.emitLocal(gen,lb);
+		    gen.arrayStore(OBJECT_TYPE);
+		  }
+		
+  }
 
   static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, GeneratorAdapter gen){
 		gen.push(2 * bindingInits.size());
