@@ -4257,8 +4257,6 @@ public static class LetExpr implements Expr{
 			}
 	}
 
-
-
 	public boolean hasJavaClass() throws Exception{
 		return body.hasJavaClass();
 	}
@@ -4704,7 +4702,7 @@ private static KeywordExpr registerKeyword(Keyword keyword){
 
 private static Expr analyzeSymbol(Symbol sym) throws Exception{
 	Symbol tag = tagOf(sym);
-	if ((sym.name.equals("v2?")) || (sym.name.equals("gbjfn")))
+	if ((sym.name.equals("v2?")) || (sym.name.equals("s2?")))
 	    gbjSym();
 	if(sym.ns == null) //ns-qualified syms are always Vars
 		{
@@ -5185,9 +5183,9 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 	Label end = gen.newLabel();
 	Label finallyLabel = gen.newLabel();
 	if (args)
-	  emitArgsAsObjectArray(bindingInits,fn,gen);
+	  emitArgsAsObjectArray(bindingInits, fn, gen);
 	else
-	  emitBindingsAsObjectArray(bindingInits,fn,gen);
+	  emitBindingsAsObjectArray(bindingInits, fn, gen);
 	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[])"));
 	gen.mark(startTry);
 	body.emit(context, fn, gen);
@@ -5207,7 +5205,7 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
   }
 
   static void emitArgsAsObjectArray(PersistentVector argLocals, FnExpr fn, GeneratorAdapter gen){
-                gen.push(2 * (argLocals.size() +fn.closes().count()));
+                gen.push(2 * (argLocals.size() + fn.closes().count()));
 		gen.newArray(OBJECT_TYPE);
 		int i = 0;
 		for(; i < argLocals.count(); i++)
@@ -5220,7 +5218,7 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 
 			gen.dup();
 			gen.push(2*i +1);
-			gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), lb.idx);
+			fn.emitLocal(gen,lb);
 			gen.arrayStore(OBJECT_TYPE);
 		}
 
@@ -5229,7 +5227,7 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 		  {
 
 		    LocalBinding lb = (LocalBinding) s.first();
-		    System.out.println("gbj sym " + lb.sym + " " + fn.fntype());
+		    // System.out.println("gbj sym " + lb.sym + " " + fn.fntype());
 		    gen.dup();
 		    gen.push(2*(i + j));
 		    fn.emitValue(lb.sym,gen);
@@ -5257,20 +5255,16 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 
 			gen.dup();
 			gen.push(2*i +1);
-			Class primc = maybePrimitiveType(bi.init);
-			if(primc != null)
-				{
-				gen.visitVarInsn(Type.getType(primc).getOpcode(Opcodes.ILOAD), bi.binding.idx);
-				HostExpr.emitBoxReturn(fn, gen, primc);
-				}
-			else
-				{
-				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ILOAD), bi.binding.idx);
-				}
+			fn.emitLocal(gen,bi.binding);
 			gen.arrayStore(OBJECT_TYPE);
 		}
 
 	}
+
+ static void gbjFn()
+ {
+   System.out.println("gbjFn");
+ }
 
  static void gbjSym()
  {
