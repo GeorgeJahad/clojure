@@ -2988,6 +2988,9 @@ static public class FnExpr implements Expr{
 	}
 
 	static Expr parse(C context, ISeq form, String name) throws Exception{
+	  //	  System.out.println("gbj name is " + name);
+	  if ((name != null) && ((name.equals("when")) || (name.equals("butlast")) || (name.equals("seq"))))
+	      gbjFn();
 		FnExpr fn = new FnExpr(tagOf(form));
 		FnMethod enclosingMethod = (FnMethod) METHOD.deref();
 		if(((IMeta) form.first()).meta() != null)
@@ -5048,7 +5051,6 @@ public static void pushNS(){
 						    ((PersistentVector) RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),(PersistentHashMap.create(keyvals))))));
 }
 
-
   public static void popLexicalFrames(boolean isLoop){
     lfPopCount++;
     Var.popThreadBindings();
@@ -5063,7 +5065,7 @@ public static void pushNS(){
     for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
 	 (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
 	 Var.popThreadBindings())
-      ;
+      	lfPopCount++;
   }
 
 static void compile1(GeneratorAdapter gen, FnExpr fn, Object form) throws Exception{
