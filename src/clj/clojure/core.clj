@@ -1201,6 +1201,13 @@
          (let [~form temp#]
            ~@body)))))
 
+(defn alter-var-root
+  "Atomically alters the root binding of var v by applying f to its
+  current value plus any args"
+  [#^clojure.lang.Var v f & args] (.alterRoot v f args))
+
+(alter-var-root #'clojure.core/*create-lexical-frames*
+                       #(identity %2) false)
 (defn push-thread-bindings
   "WARNING: This is a low-level function. Prefer high-level macros like
   binding where ever possible.
@@ -1222,6 +1229,8 @@
   pop bindings without pushing before."
   []
   (clojure.lang.Var/popThreadBindings))
+(alter-var-root #'clojure.core/*create-lexical-frames*
+                #(identity %2) true)
 
 (defn get-thread-bindings
   "Get a map with the Var/value pairs which is currently in effect for the
