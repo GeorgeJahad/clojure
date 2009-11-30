@@ -181,10 +181,13 @@ static final public Var IN_CATCH_FINALLY = Var.create(null);
 static final public Var LOADER = Var.create();
 
 static final public Var CREATE_LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-							   Symbol.create("*create-lexical-frames*"), false);
+							   Symbol.create("*create-lexical-frames*"), true);
 
 static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
                                             Symbol.create("*lexical-frames*"), PersistentVector.EMPTY);
+
+static final public Var LEXICAL_FRAMES_LOOP_MARKER = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
+							   Symbol.create("*lexical-frames-loop-marker*"), 0);
 
 
 //String
@@ -3805,7 +3808,8 @@ public static class FnMethod{
 		try
 			{
 			Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel, METHOD, this));
-			if (!lexicalFrames(argLocals,body,C.RETURN,fn,gen,true))
+			if (!lexicalFrames(argLocals, body, C.RETURN, fn,
+					   gen, true, true))
 			  body.emit(C.RETURN, fn, gen);
 			Label end = gen.mark();
 			gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
@@ -4230,7 +4234,7 @@ public static class LetExpr implements Expr{
 			try
 				{
 				Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel));
-				if (!lexicalFrames(bindingInits,body,context,fn,gen,false))
+				if (!lexicalFrames(bindingInits,body,context,fn,gen,false, true))
 				  body.emit(context, fn, gen);
 				}
 			finally
@@ -4238,7 +4242,7 @@ public static class LetExpr implements Expr{
 				Var.popThreadBindings();
 				}
 			}
-		else if (!lexicalFrames(bindingInits,body,context,fn,gen,false))
+		else if (!lexicalFrames(bindingInits,body,context,fn,gen,false, false))
 			body.emit(context, fn, gen);
 		Label end = gen.mark();
 //		gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
@@ -4317,7 +4321,9 @@ public static class RecurExpr implements Expr{
 			else
 				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ISTORE), lb.idx);
 			}
-
+		if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
+		  gen.invokeStatic(Type.getType(Compiler.class), 
+				   Method.getMethod("void popToLoopMarker()"));
 		gen.goTo(loopLabel);
 	}
 
@@ -5027,10 +5033,38 @@ public static void pushNS(){
 	                                                           Symbol.create("*ns*")), null));
 }
 
-  public static void pushLexicalFrames(Object[] keyvals){
+  static int lfPushCount = 0;
+  static int lfPopCount = 0;
+  static int lfPopExcCount = 0;
+  public static void pushLexicalFrames(Object[] keyvals, boolean isLoop){
+    if (isLoop)
+      {
+	Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,(Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
+	lfPushCount++;
+      }
+
+    lfPushCount++;
     Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
 						    ((PersistentVector) RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),(PersistentHashMap.create(keyvals))))));
 }
+
+
+  public static void popLexicalFrames(boolean isLoop){
+    lfPopCount++;
+    Var.popThreadBindings();
+    if (isLoop)
+      {
+	Var.popThreadBindings();
+	lfPopCount++;
+      }
+  }
+
+  public static void popToLoopMarker(){
+    for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
+	 (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
+	 Var.popThreadBindings())
+      ;
+  }
 
 static void compile1(GeneratorAdapter gen, FnExpr fn, Object form) throws Exception{
 	Integer line = (Integer) LINE.deref();
@@ -5173,10 +5207,9 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 }
 
   static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
-			       boolean args){
+			       boolean args, boolean isLoop){
 
-    if ((Boolean)CREATE_LEXICAL_FRAMES.deref() && 
-	((bindingInits.count() > 0) || fn.closes().count() > 0))
+    if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
       {
 	Label startTry = gen.newLabel();
 	Label endTry = gen.newLabel();
@@ -5186,16 +5219,19 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 	  emitArgsAsObjectArray(bindingInits, fn, gen);
 	else
 	  emitBindingsAsObjectArray(bindingInits, fn, gen);
-	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[])"));
+	gen.push(isLoop);
+	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[], boolean)"));
 	gen.mark(startTry);
 	body.emit(context, fn, gen);
 	gen.mark(endTry);
-	gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
+	gen.push(isLoop);
+	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
 	gen.goTo(end);
 	
 	gen.mark(finallyLabel);
 	//exception should be on stack
-	gen.invokeStatic(VAR_TYPE, Method.getMethod("void popThreadBindings()"));
+	gen.push(isLoop);
+	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
 	gen.throwException();
 	gen.mark(end);
 	gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
