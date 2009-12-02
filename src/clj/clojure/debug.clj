@@ -47,20 +47,25 @@
           (keys (into {} clojure.core/*lexical-frames*))))
 
 (defmacro eval-with-context [context form]
-  (let  [lex-bindings (gensym)]
-    ;; don't use "do" with push-thread-bindings, because "do" causes
-    ;;  each sub form to be eval'd separately, with
-    ;;  pop-thread-bindings after each, causing unbalanced push/pops.
-    ;;  Use "(let [])" instead, as that causes all the sub-forms to be
-    ;;  eval'd together with no itermediate pops
-    `(let []
-       (push-thread-bindings ~context)
-       (try
-        (eval
-         '(let [~lex-bindings (into {} clojure.core/*lexical-frames*)]
-            (let [~@(make-let-bindings lex-bindings)]
-              ~form)))
-        (finally (pop-thread-bindings))))))
+  (do
+    ;;eval??
+    (push-thread-bindings (eval context))
+    (try
+     (let  [lex-bindings (gensym)]
+       ;; don't use "do" with push-thread-bindings, because "do" causes
+       ;;  each sub form to be eval'd separately, with
+       ;;  pop-thread-bindings after each, causing unbalanced push/pops.
+       ;;  Use "(let [])" instead, as that causes all the sub-forms to be
+       ;;  eval'd together with no itermediate pops
+       `(let []
+          (push-thread-bindings ~context)
+          (try
+           (eval
+            '(let [~lex-bindings (into {} clojure.core/*lexical-frames*)]
+               (let [~@(make-let-bindings lex-bindings)]
+                 ~form)))
+           (finally (pop-thread-bindings)))))
+     (finally (pop-thread-bindings)))))
 
 (defn eval-with-context-fn [context form]
   (eval `(eval-with-context ~context ~form)))
@@ -68,3 +73,4 @@
 (defmacro debug-repl [context]
   `(clojure.main/repl :prompt #(print "dr => ")
                       :eval (partial eval-with-context-fn '~context)))
+
