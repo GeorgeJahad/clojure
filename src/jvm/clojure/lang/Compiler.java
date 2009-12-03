@@ -2988,9 +2988,6 @@ static public class FnExpr implements Expr{
 	}
 
 	static Expr parse(C context, ISeq form, String name) throws Exception{
-	  //	  System.out.println("gbj name is " + name);
-	  if ((name != null) && ((name.equals("when")) || (name.equals("butlast")) || (name.equals("seq"))))
-	      gbjFn();
 		FnExpr fn = new FnExpr(tagOf(form));
 		FnMethod enclosingMethod = (FnMethod) METHOD.deref();
 		if(((IMeta) form.first()).meta() != null)
@@ -4711,8 +4708,6 @@ private static KeywordExpr registerKeyword(Keyword keyword){
 
 private static Expr analyzeSymbol(Symbol sym) throws Exception{
 	Symbol tag = tagOf(sym);
-	if ((sym.name.equals("v2?")) || (sym.name.equals("s2?")))
-	    gbjSym();
 	if(sym.ns == null) //ns-qualified syms are always Vars
 		{
 		LocalBinding b = referenceLocal(sym);
@@ -5265,7 +5260,6 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 		  {
 
 		    LocalBinding lb = (LocalBinding) s.first();
-		    // System.out.println("gbj sym " + lb.sym + " " + fn.fntype());
 		    gen.dup();
 		    gen.push(2*(i + j));
 		    fn.emitValue(lb.sym,gen);
@@ -5298,14 +5292,4 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 		}
 
 	}
-
- static void gbjFn()
- {
-   System.out.println("gbjFn");
- }
-
- static void gbjSym()
- {
-   System.out.println("gbjsym");
- }
 }
