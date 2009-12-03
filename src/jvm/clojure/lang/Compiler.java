@@ -180,15 +180,16 @@ static final public Var IN_CATCH_FINALLY = Var.create(null);
 //DynamicClassLoader
 static final public Var LOADER = Var.create();
 
+//boolean
 static final public Var CREATE_LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-							   Symbol.create("*create-lexical-frames*"), false);
+							   Symbol.create("*create-lexical-frames*"), true);
 
+//Vector
 static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
                                             Symbol.create("*lexical-frames*"), PersistentVector.EMPTY);
-
+//Integer
 static final public Var LEXICAL_FRAMES_LOOP_MARKER = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
 							   Symbol.create("*lexical-frames-loop-marker*"), 0);
-
 
 //String
 static final public Var SOURCE = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
@@ -3808,8 +3809,7 @@ public static class FnMethod{
 		try
 			{
 			Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel, METHOD, this));
-			if (!lexicalFrames(argLocals, body, C.RETURN, fn,
-					   gen, true, true))
+			if (!lexicalFrames(argLocals, body, C.RETURN, fn, gen, true, true))
 			  body.emit(C.RETURN, fn, gen);
 			Label end = gen.mark();
 			gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
@@ -4234,7 +4234,7 @@ public static class LetExpr implements Expr{
 			try
 				{
 				Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel));
-				if (!lexicalFrames(bindingInits,body,context,fn,gen,false, true))
+				if (!lexicalFrames(bindingInits, body, context, fn, gen, false, true))
 				  body.emit(context, fn, gen);
 				}
 			finally
@@ -4242,7 +4242,7 @@ public static class LetExpr implements Expr{
 				Var.popThreadBindings();
 				}
 			}
-		else if (!lexicalFrames(bindingInits,body,context,fn,gen,false, false))
+		else if (!lexicalFrames(bindingInits, body, context, fn, gen, false, false))
 			body.emit(context, fn, gen);
 		Label end = gen.mark();
 //		gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
@@ -4321,9 +4321,7 @@ public static class RecurExpr implements Expr{
 			else
 				gen.visitVarInsn(OBJECT_TYPE.getOpcode(Opcodes.ISTORE), lb.idx);
 			}
-		if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
-		  gen.invokeStatic(Type.getType(Compiler.class), 
-				   Method.getMethod("void popToLoopMarker()"));
+		popRecur(gen);
 		gen.goTo(loopLabel);
 	}
 
@@ -5031,38 +5029,6 @@ public static void pushNS(){
 	                                                           Symbol.create("*ns*")), null));
 }
 
-  static int lfPushCount = 0;
-  static int lfPopCount = 0;
-  static int lfPopExcCount = 0;
-  public static void pushLexicalFrames(Object[] keyvals, boolean isLoop){
-    if (isLoop)
-      {
-	Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,(Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
-	lfPushCount++;
-      }
-
-    lfPushCount++;
-    Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
-						    ((PersistentVector) RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),(PersistentHashMap.create(keyvals))))));
-}
-
-  public static void popLexicalFrames(boolean isLoop){
-    lfPopCount++;
-    Var.popThreadBindings();
-    if (isLoop)
-      {
-	Var.popThreadBindings();
-	lfPopCount++;
-      }
-  }
-
-  public static void popToLoopMarker(){
-    for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
-	 (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
-	 Var.popThreadBindings())
-      	lfPopCount++;
-  }
-
 static void compile1(GeneratorAdapter gen, FnExpr fn, Object form) throws Exception{
 	Integer line = (Integer) LINE.deref();
 	if(RT.meta(form) != null && RT.meta(form).containsKey(RT.LINE_KEY))
@@ -5203,93 +5169,120 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 	return ret;
 }
 
-  static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
-			       boolean args, boolean isLoop){
+static int lfPushCount = 0;
+static int lfPopCount = 0;
+static int lfPopExcCount = 0;
 
-    if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
-      {
-	Label startTry = gen.newLabel();
-	Label endTry = gen.newLabel();
-	Label end = gen.newLabel();
-	Label finallyLabel = gen.newLabel();
-	if (args)
-	  emitArgsAsObjectArray(bindingInits, fn, gen);
-	else
-	  emitBindingsAsObjectArray(bindingInits, fn, gen);
-	gen.push(isLoop);
-	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[], boolean)"));
-	gen.mark(startTry);
-	body.emit(context, fn, gen);
-	gen.mark(endTry);
-	gen.push(isLoop);
-	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
-	gen.goTo(end);
+public static void pushLexicalFrames(Object[] keyvals, boolean isLoop){
+	if (isLoop)
+	  {
+	    Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,
+							    (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
+	    lfPushCount++;
+	  }
 	
-	gen.mark(finallyLabel);
-	//exception should be on stack
-	gen.push(isLoop);
-	gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
-	gen.throwException();
-	gen.mark(end);
-	gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
-	return true;
-      }
-    return false;
-  }
+	lfPushCount++;
+	Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
+							((PersistentVector)
+							 RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),
+								 (PersistentHashMap.create(keyvals))))));
+}
 
-  static void emitArgsAsObjectArray(PersistentVector argLocals, FnExpr fn, GeneratorAdapter gen){
-                gen.push(2 * (argLocals.size() + fn.closes().count()));
-		gen.newArray(OBJECT_TYPE);
-		int i = 0;
-		for(; i < argLocals.count(); i++)
-		{
-			LocalBinding lb = (LocalBinding) argLocals.nth(i);
-			gen.dup();
-			gen.push(2*i);
-			fn.emitValue(lb.sym,gen);
-			gen.arrayStore(OBJECT_TYPE);
-
-			gen.dup();
-			gen.push(2*i +1);
-			fn.emitLocal(gen,lb);
-			gen.arrayStore(OBJECT_TYPE);
-		}
-
-		int j = 0;
-		for(ISeq s = RT.keys(fn.closes); s != null; s = s.next(),j++)
-		  {
-
-		    LocalBinding lb = (LocalBinding) s.first();
-		    gen.dup();
-		    gen.push(2*(i + j));
-		    fn.emitValue(lb.sym,gen);
-		    gen.arrayStore(OBJECT_TYPE);
-		    
-		    gen.dup();
-		    gen.push(2*(i + j) + 1);
-		    fn.emitLocal(gen,lb);
-		    gen.arrayStore(OBJECT_TYPE);
-		  }
-		
-  }
-
-  static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, GeneratorAdapter gen){
-		gen.push(2 * bindingInits.size());
-		gen.newArray(OBJECT_TYPE);
-
-		for(int i = 0; i < bindingInits.count(); i++)
-		{
-			BindingInit bi = (BindingInit) bindingInits.nth(i);
-			gen.dup();
-			gen.push(2*i);
-			fn.emitValue(bi.binding.sym,gen);
-			gen.arrayStore(OBJECT_TYPE);
-
-			gen.dup();
-			gen.push(2*i +1);
-			fn.emitLocal(gen,bi.binding);
-			gen.arrayStore(OBJECT_TYPE);
-		}
-
-	}
+public static void popLexicalFrames(boolean isLoop){
+	Var.popThreadBindings();
+	lfPopCount++;
+	if (isLoop)
+	  {
+	    Var.popThreadBindings();
+	    lfPopCount++;
+	  }
+}
+  
+public static void popToLoopMarker(){
+	for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
+	     (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
+	     Var.popThreadBindings())
+	  lfPopCount++;
+}
+  
+static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
+			     boolean args, boolean isLoop){
+  
+	if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
+	  {
+	    Label startTry = gen.newLabel();
+	    Label endTry = gen.newLabel();
+	    Label end = gen.newLabel();
+	    Label finallyLabel = gen.newLabel();
+	    if (args)
+	      emitArgsAsObjectArray(bindingInits, fn, gen);
+	    else
+	      emitBindingsAsObjectArray(bindingInits, fn, gen);
+	    gen.push(isLoop);
+	    gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[], boolean)"));
+	    gen.mark(startTry);
+	    body.emit(context, fn, gen);
+	    gen.mark(endTry);
+	    gen.push(isLoop);
+	    gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
+	    gen.goTo(end);
+	    
+	    gen.mark(finallyLabel);
+	    //exception should be on stack
+	    gen.push(isLoop);
+	    gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
+	    gen.throwException();
+	    gen.mark(end);
+	    gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
+	    return true;
+	  }
+	return false;
+}
+  
+static void emitBinding(LocalBinding lb, FnExpr fn, int offset, GeneratorAdapter gen){
+	gen.dup();
+	gen.push(offset);
+	fn.emitValue(lb.sym,gen);
+	gen.arrayStore(OBJECT_TYPE);
+	
+	gen.dup();
+	gen.push(offset + 1);
+	fn.emitLocal(gen,lb);
+	gen.arrayStore(OBJECT_TYPE);
+}
+  
+static void emitArgsAsObjectArray(PersistentVector argLocals, FnExpr fn, GeneratorAdapter gen){
+	gen.push(2 * (argLocals.size() + fn.closes().count()));
+	gen.newArray(OBJECT_TYPE);
+	int i = 0;
+	for(; i < argLocals.count(); i++)
+	  {
+	    LocalBinding lb = (LocalBinding) argLocals.nth(i);
+	    emitBinding(lb, fn, 2*i, gen);
+	  }
+	
+	int j = 0;
+	for(ISeq s = RT.keys(fn.closes); s != null; s = s.next(),j++)
+	  {
+	    LocalBinding lb = (LocalBinding) s.first();
+	    emitBinding(lb, fn, 2*(i+j), gen);
+	  }
+}
+  
+static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, GeneratorAdapter gen){
+	gen.push(2 * bindingInits.size());
+	gen.newArray(OBJECT_TYPE);
+	
+	for(int i = 0; i < bindingInits.count(); i++)
+	  {
+	    BindingInit bi = (BindingInit) bindingInits.nth(i);
+	    emitBinding(bi.binding, fn, 2*i, gen);
+	  }
+  
+}
+public static void popRecur(GeneratorAdapter gen){
+	if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
+	  gen.invokeStatic(Type.getType(Compiler.class), 
+			   Method.getMethod("void popToLoopMarker()"));
+}
 }
