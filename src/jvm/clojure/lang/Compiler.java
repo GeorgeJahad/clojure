@@ -5175,11 +5175,11 @@ static int lfPopExcCount = 0;
 
 public static void pushLexicalFrames(Object[] keyvals, boolean isLoop){
 	if (isLoop)
-	  {
-	    Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,
-							    (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
-	    lfPushCount++;
-	  }
+	{
+		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,
+								(Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
+		lfPushCount++;
+	}
 	
 	lfPushCount++;
 	Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
@@ -5192,50 +5192,51 @@ public static void popLexicalFrames(boolean isLoop){
 	Var.popThreadBindings();
 	lfPopCount++;
 	if (isLoop)
-	  {
-	    Var.popThreadBindings();
-	    lfPopCount++;
-	  }
+	{
+		Var.popThreadBindings();
+		lfPopCount++;
+	}
 }
   
 public static void popToLoopMarker(){
 	for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
 	     (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
 	     Var.popThreadBindings())
-	  lfPopCount++;
+		lfPopCount++;
 }
   
 static boolean lexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
 			     boolean args, boolean isLoop){
   
 	if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
-	  {
-	    Label startTry = gen.newLabel();
-	    Label endTry = gen.newLabel();
-	    Label end = gen.newLabel();
-	    Label finallyLabel = gen.newLabel();
-	    if (args)
-	      emitArgsAsObjectArray(bindingInits, fn, gen);
-	    else
-	      emitBindingsAsObjectArray(bindingInits, fn, gen);
-	    gen.push(isLoop);
-	    gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void pushLexicalFrames(Object[], boolean)"));
-	    gen.mark(startTry);
-	    body.emit(context, fn, gen);
-	    gen.mark(endTry);
-	    gen.push(isLoop);
-	    gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
-	    gen.goTo(end);
-	    
-	    gen.mark(finallyLabel);
-	    //exception should be on stack
-	    gen.push(isLoop);
-	    gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
-	    gen.throwException();
-	    gen.mark(end);
-	    gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
-	    return true;
-	  }
+	{
+		Label startTry = gen.newLabel();
+		Label endTry = gen.newLabel();
+		Label end = gen.newLabel();
+		Label finallyLabel = gen.newLabel();
+		if (args)
+			emitArgsAsObjectArray(bindingInits, fn, gen);
+		else
+	      		emitBindingsAsObjectArray(bindingInits, fn, gen);
+		gen.push(isLoop);
+		gen.invokeStatic(Type.getType(Compiler.class),
+				 Method.getMethod("void pushLexicalFrames(Object[], boolean)"));
+		gen.mark(startTry);
+		body.emit(context, fn, gen);
+		gen.mark(endTry);
+		gen.push(isLoop);
+		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
+		gen.goTo(end);
+		
+		gen.mark(finallyLabel);
+		//exception should be on stack
+		gen.push(isLoop);
+		gen.invokeStatic(Type.getType(Compiler.class), Method.getMethod("void popLexicalFrames(boolean)"));
+		gen.throwException();
+		gen.mark(end);
+		gen.visitTryCatchBlock(startTry, endTry, finallyLabel, null);
+		return true;
+	}
 	return false;
 }
   
@@ -5256,17 +5257,17 @@ static void emitArgsAsObjectArray(PersistentVector argLocals, FnExpr fn, Generat
 	gen.newArray(OBJECT_TYPE);
 	int i = 0;
 	for(; i < argLocals.count(); i++)
-	  {
-	    LocalBinding lb = (LocalBinding) argLocals.nth(i);
-	    emitBinding(lb, fn, 2*i, gen);
-	  }
+	{
+		LocalBinding lb = (LocalBinding) argLocals.nth(i);
+		emitBinding(lb, fn, 2*i, gen);
+	}
 	
 	int j = 0;
 	for(ISeq s = RT.keys(fn.closes); s != null; s = s.next(),j++)
-	  {
-	    LocalBinding lb = (LocalBinding) s.first();
-	    emitBinding(lb, fn, 2*(i+j), gen);
-	  }
+	{
+		LocalBinding lb = (LocalBinding) s.first();
+		emitBinding(lb, fn, 2*(i+j), gen);
+	}
 }
   
 static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, GeneratorAdapter gen){
@@ -5274,10 +5275,10 @@ static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, 
 	gen.newArray(OBJECT_TYPE);
 	
 	for(int i = 0; i < bindingInits.count(); i++)
-	  {
-	    BindingInit bi = (BindingInit) bindingInits.nth(i);
-	    emitBinding(bi.binding, fn, 2*i, gen);
-	  }
+	{
+		BindingInit bi = (BindingInit) bindingInits.nth(i);
+		emitBinding(bi.binding, fn, 2*i, gen);
+	}
   
 }
 public static void popRecur(GeneratorAdapter gen){
