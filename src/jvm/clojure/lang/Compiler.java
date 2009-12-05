@@ -186,7 +186,7 @@ static final public Var CREATE_LEXICAL_FRAMES = Var.intern(Namespace.findOrCreat
 
 //Vector
 static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-                                            Symbol.create("*lexical-frames*"), PersistentVector.EMPTY);
+                                            Symbol.create("*lexical-frames*"), null);
 //Integer
 static final public Var LEXICAL_FRAMES_LOOP_MARKER = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
 							   Symbol.create("*lexical-frames-loop-marker*"), 0);
@@ -3809,7 +3809,7 @@ public static class FnMethod{
 		try
 			{
 			Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel, METHOD, this));
-			emitBodyWithLexicalFrames(argLocals, body, C.RETURN, fn, gen, true, true);
+			emitBodyWithLexicalFrames(argLocals, body, C.RETURN, fn, gen, FN);
 			Label end = gen.mark();
 			gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
 			for(ISeq lbs = argLocals.seq(); lbs != null; lbs = lbs.next())
@@ -4233,7 +4233,7 @@ public static class LetExpr implements Expr{
 			try
 				{
 				Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel));
-				emitBodyWithLexicalFrames(bindingInits, body, context, fn, gen, false, true);
+				emitBodyWithLexicalFrames(bindingInits, body, context, fn, gen, LOOP);
 				}
 			finally
 				{
@@ -4241,7 +4241,7 @@ public static class LetExpr implements Expr{
 				}
 			}
 		else 
-			emitBodyWithLexicalFrames(bindingInits, body, context, fn, gen, false, false);
+			emitBodyWithLexicalFrames(bindingInits, body, context, fn, gen, LET);
 		Label end = gen.mark();
 //		gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
 		for(ISeq bis = bindingInits.seq(); bis != null; bis = bis.next())
@@ -5171,7 +5171,7 @@ static int lfPushCount = 0;
 static int lfPopCount = 0;
 static int lfPopExcCount = 0;
 
-public static void pushLexicalFrames(Object[] keyvals, boolean isLoop){
+public static void pushLexicalFrames(Object[] keyvals, boolean isLoop, boolean isFn){
 	if (isLoop)
 	{
 		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,
@@ -5180,10 +5180,17 @@ public static void pushLexicalFrames(Object[] keyvals, boolean isLoop){
 	}
 	
 	lfPushCount++;
-	Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
-							((PersistentVector)
-							 RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),
-								 (PersistentHashMap.create(keyvals))))));
+	if (isFn)
+		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
+								((PersistentVector)
+								 RT.conj(PersistentVector.EMPTY,
+									 (PersistentHashMap.create(keyvals))))));
+
+	else
+		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
+								((PersistentVector)
+								 RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),
+									 (PersistentHashMap.create(keyvals))))));
 }
 
 public static void popLexicalFrames(boolean isLoop){
@@ -5204,7 +5211,7 @@ public static void popToLoopMarker(){
 }
   
 static void emitBodyWithLexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
-			     boolean args, boolean isLoop){
+				      Symbol scopeType){
   
 	if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
 	{
@@ -5212,13 +5219,16 @@ static void emitBodyWithLexicalFrames(PersistentVector bindingInits,Expr body,C 
 		Label endTry = gen.newLabel();
 		Label end = gen.newLabel();
 		Label finallyLabel = gen.newLabel();
-		if (args)
+		boolean isLoop = (scopeType == LOOP)|(scopeType == FN);
+		boolean isFn = (scopeType == FN);
+		if (isFn)
 			emitArgsAsObjectArray(bindingInits, fn, gen);
 		else
 	      		emitBindingsAsObjectArray(bindingInits, fn, gen);
 		gen.push(isLoop);
+		gen.push(isFn);
 		gen.invokeStatic(Type.getType(Compiler.class),
-				 Method.getMethod("void pushLexicalFrames(Object[], boolean)"));
+				 Method.getMethod("void pushLexicalFrames(Object[], boolean, boolean)"));
 		gen.mark(startTry);
 		body.emit(context, fn, gen);
 		gen.mark(endTry);
