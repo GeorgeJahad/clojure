@@ -186,7 +186,7 @@ static final public Var CREATE_LEXICAL_FRAMES = Var.intern(Namespace.findOrCreat
 
 //Vector
 static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-                                            Symbol.create("*lexical-frames*"), null);
+                                            Symbol.create("*lexical-frames*"), PersistentVector.EMPTY);
 //Integer
 static final public Var LEXICAL_FRAMES_LOOP_MARKER = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
 							   Symbol.create("*lexical-frames-loop-marker*"), 0);

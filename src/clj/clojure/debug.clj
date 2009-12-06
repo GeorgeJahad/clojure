@@ -39,33 +39,34 @@
   `(with-lexical-frames
      (deftest ~test-name ~@deftest-stuff)))
 
-(defmacro get-context [context]
-  `(def ~context (get-thread-bindings)))
+(defstruct context-struct :bindings :lexical-frames)
 
-(defn make-let-bindings [lex-bindings]
+(defmacro get-context [context]
+  `(do (def ~context (struct context-struct
+                             (get-thread-bindings) *lexical-frames*))
+       ~context))
+
+(defn make-let-bindings [lex-bindings frames]
   (mapcat #(vector % `(~lex-bindings '~%))
-          (keys (into {} clojure.core/*lexical-frames*))))
+          (keys (into {} frames))))
 
 (defmacro eval-with-context [context form]
-  (do
-    ;;eval??
-    (push-thread-bindings (eval context))
-    (try
-     (let  [lex-bindings (gensym)]
-       ;; don't use "do" with push-thread-bindings, because "do" causes
-       ;;  each sub form to be eval'd separately, with
-       ;;  pop-thread-bindings after each, causing unbalanced push/pops.
-       ;;  Use "(let [])" instead, as that causes all the sub-forms to be
-       ;;  eval'd together with no itermediate pops
-       `(let []
-          (push-thread-bindings ~context)
-          (try
-           (eval
-            '(let [~lex-bindings (into {} clojure.core/*lexical-frames*)]
-               (let [~@(make-let-bindings lex-bindings)]
-                 ~form)))
-           (finally (pop-thread-bindings)))))
-     (finally (pop-thread-bindings)))))
+  (let  [lex-bindings (gensym)]
+    ;; don't use "do" with push-thread-bindings, because "do" causes
+    ;;  each sub form to be eval'd separately, with
+    ;;  pop-thread-bindings after each, causing unbalanced push/pops.
+    ;;  Use "(let [])" instead, as that causes all the sub-forms to be
+    ;;  eval'd together with no itermediate pops
+    `(let []
+       (push-thread-bindings (:bindings ~context))
+       (try
+        (eval
+         '(let [~lex-bindings (into {} (:lexical-frames ~context))]
+            (let [~@(make-let-bindings
+                     lex-bindings
+                     (:lexical-frames (var-get (resolve context))))]
+              ~form)))
+        (finally (pop-thread-bindings))))))
 
 (defn eval-with-context-fn [context form]
   (eval `(eval-with-context ~context ~form)))
