@@ -182,7 +182,7 @@ static final public Var LOADER = Var.create();
 
 //boolean
 static final public Var CREATE_LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
-							   Symbol.create("*create-lexical-frames*"), true);
+							   Symbol.create("*create-lexical-frames*"), false);
 
 //Vector
 static final public Var LEXICAL_FRAMES = Var.intern(Namespace.findOrCreate(Symbol.create("clojure.core")),
