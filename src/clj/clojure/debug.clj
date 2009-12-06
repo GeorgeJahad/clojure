@@ -19,7 +19,16 @@
 (def context-cmd '(struct context-struct
                           (get-thread-bindings) *lexical-frames*))
 
-(defmacro get-context [context] `(def ~context ~context-cmd))
+(defn check-lexical-frames []
+  (let [err-str
+        (str "must run debug-repl/get-context "
+         "using with-lexical-frames/defn-debug/defmacro-debug etc ")]
+    (when-not *create-lexical-frames*
+      (throw (IllegalStateException. err-str)))))
+
+(defmacro get-context [context]
+  (check-lexical-frames)
+  `(def ~context ~context-cmd))
 
 (defn make-let-bindings [lex-bindings frames]
   (mapcat #(vector % `(~lex-bindings '~%))
@@ -50,6 +59,7 @@
 
 (defmacro debug-repl
   ([]
+     (check-lexical-frames)
      `(binding [debug-repl-context ~context-cmd]
         (debug-repl debug-repl-context)))
   ([context]
