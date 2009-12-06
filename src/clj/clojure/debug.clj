@@ -69,13 +69,8 @@
 (defmacro with-lexical-frames
   "Turns on lexical frame creation"
   [& body]
-  `(do
-     (alter-var-root #'clojure.core/*create-lexical-frames* alter-helper true)
-     (try
-      ~@body
-      (finally
-       (alter-var-root #'clojure.core/*create-lexical-frames*
-                       alter-helper false)))))
+  `(binding [*create-lexical-frames* true]
+     (eval '~@body)))
 
 (defmacro defn-debug
   [fn-name & defn-stuff]
@@ -86,3 +81,8 @@
   [test-name & deftest-stuff]
   `(with-lexical-frames
      (deftest ~test-name ~@deftest-stuff)))
+
+(defmacro defmacro-debug
+  [macro-name & defmacro-stuff]
+  `(with-lexical-frames
+     (defmacro ~macro-name ~@defmacro-stuff)))
