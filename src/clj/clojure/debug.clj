@@ -41,10 +41,10 @@
 
 (defstruct context-struct :bindings :lexical-frames)
 
-(defmacro get-context [context]
-  `(do (def ~context (struct context-struct
-                             (get-thread-bindings) *lexical-frames*))
-       ~context))
+(def context-cmd '(struct context-struct
+                          (get-thread-bindings) *lexical-frames*))
+
+(defmacro get-context [context] `(def ~context ~context-cmd))
 
 (defn make-let-bindings [lex-bindings frames]
   (mapcat #(vector % `(~lex-bindings '~%))
@@ -71,7 +71,15 @@
 (defn eval-with-context-fn [context form]
   (eval `(eval-with-context ~context ~form)))
 
-(defmacro debug-repl [context]
-  `(clojure.main/repl :prompt #(print "dr => ")
-                      :eval (partial eval-with-context-fn '~context)))
+(def debug-repl-context nil)
+
+(defmacro debug-repl
+  ([]
+     `(do
+        (alter-var-root #'clojure.debug/debug-repl-context
+                        alter-helper ~context-cmd)
+        (debug-repl debug-repl-context)))
+  ([context]
+     `(clojure.main/repl :prompt #(print "dr => ")
+                         :eval (partial eval-with-context-fn '~context))))
 
