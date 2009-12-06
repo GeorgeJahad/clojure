@@ -50,21 +50,11 @@
 
 (defmacro debug-repl
   ([]
-     `(do
-        (alter-var-root #'clojure.debug/debug-repl-context
-                        alter-helper ~context-cmd)
+     `(binding [debug-repl-context ~context-cmd]
         (debug-repl debug-repl-context)))
   ([context]
      `(clojure.main/repl :prompt #(print "dr => ")
                          :eval (partial eval-with-context-fn '~context))))
-
-
-;; dynamic bindings don't seem to work at compile time so I had to use
-;; alter-var-root.  with-alter-var-root doesn't work because it is
-;; nested in one big let block and compiler granularity requires
-;; it to be in a "do" block
-
-(defn alter-helper [a b] b)
 
 (defmacro with-lexical-frames
   "Turns on lexical frame creation"
