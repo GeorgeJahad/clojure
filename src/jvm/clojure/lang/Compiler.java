@@ -3809,7 +3809,7 @@ public static class FnMethod{
 		try
 			{
 			Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel, METHOD, this));
-			emitBodyWithLexicalFrames(argLocals, body, C.RETURN, fn, gen, FN);
+			emitBodyWithLexicalFrames(C.RETURN, fn, gen, argLocals, body, FN);
 			Label end = gen.mark();
 			gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
 			for(ISeq lbs = argLocals.seq(); lbs != null; lbs = lbs.next())
@@ -4233,7 +4233,7 @@ public static class LetExpr implements Expr{
 			try
 				{
 				Var.pushThreadBindings(RT.map(LOOP_LABEL, loopLabel));
-				emitBodyWithLexicalFrames(bindingInits, body, context, fn, gen, LOOP);
+				emitBodyWithLexicalFrames(context, fn, gen, bindingInits, body, LOOP);
 				}
 			finally
 				{
@@ -4241,7 +4241,7 @@ public static class LetExpr implements Expr{
 				}
 			}
 		else 
-			emitBodyWithLexicalFrames(bindingInits, body, context, fn, gen, LET);
+			emitBodyWithLexicalFrames(context, fn, gen, bindingInits, body, LET);
 		Label end = gen.mark();
 //		gen.visitLocalVariable("this", "Ljava/lang/Object;", null, loopLabel, end, 0);
 		for(ISeq bis = bindingInits.seq(); bis != null; bis = bis.next())
@@ -5167,50 +5167,7 @@ public static Object compile(Reader rdr, String sourcePath, String sourceName) t
 	return ret;
 }
 
-static int lfPushCount = 0;
-static int lfPopCount = 0;
-static int lfPopExcCount = 0;
-
-public static void pushLexicalFrames(Object[] keyvals, boolean isLoop, boolean isFn){
-	if (isLoop)
-	{
-		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,
-								(Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
-		lfPushCount++;
-	}
-	
-	lfPushCount++;
-	if (isFn)
-		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
-								((PersistentVector)
-								 RT.conj(PersistentVector.EMPTY,
-									 (PersistentHashMap.create(keyvals))))));
-
-	else
-		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
-								((PersistentVector)
-								 RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),
-									 (PersistentHashMap.create(keyvals))))));
-}
-
-public static void popLexicalFrames(boolean isLoop){
-	Var.popThreadBindings();
-	lfPopCount++;
-	if (isLoop)
-	{
-		Var.popThreadBindings();
-		lfPopCount++;
-	}
-}
-  
-public static void popToLoopMarker(){
-	for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
-	     (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
-	     Var.popThreadBindings())
-		lfPopCount++;
-}
-  
-static void emitBodyWithLexicalFrames(PersistentVector bindingInits,Expr body,C context, FnExpr fn, GeneratorAdapter gen,
+static void emitBodyWithLexicalFrames(C context, FnExpr fn, GeneratorAdapter gen, PersistentVector bindingInits,Expr body,
 				      Symbol scopeType){
   
 	if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
@@ -5290,9 +5247,51 @@ static void emitBindingsAsObjectArray(PersistentVector bindingInits, FnExpr fn, 
 	}
   
 }
+
+static int lfPushCount = 0;
+static int lfPopCount = 0;
+
+public static void pushLexicalFrames(Object[] keyvals, boolean isLoop, boolean isFn){
+	if (isLoop)
+	{
+		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES_LOOP_MARKER,
+								(Integer) LEXICAL_FRAMES_LOOP_MARKER.deref() + 1));
+		lfPushCount++;
+	}
+	
+	lfPushCount++;
+	if (isFn)
+		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
+								((PersistentVector)
+								 RT.conj(PersistentVector.EMPTY,
+									 (PersistentHashMap.create(keyvals))))));
+
+	else
+		Var.pushThreadBindings(PersistentHashMap.create(LEXICAL_FRAMES,
+								((PersistentVector)
+								 RT.conj((PersistentVector)LEXICAL_FRAMES.deref(),
+									 (PersistentHashMap.create(keyvals))))));
+}
+
+public static void popLexicalFrames(boolean isLoop){
+	Var.popThreadBindings();
+	lfPopCount++;
+	if (isLoop)
+	{
+		Var.popThreadBindings();
+		lfPopCount++;
+	}
+}
+  
 public static void popLexicalFramesForRecur(GeneratorAdapter gen){
 	if ((Boolean)CREATE_LEXICAL_FRAMES.deref())
 	  gen.invokeStatic(Type.getType(Compiler.class), 
 			   Method.getMethod("void popToLoopMarker()"));
+}
+public static void popToLoopMarker(){
+	for (Integer marker = (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref();
+	     (marker == (Integer) LEXICAL_FRAMES_LOOP_MARKER.deref());
+	     Var.popThreadBindings())
+		lfPopCount++;
 }
 }
