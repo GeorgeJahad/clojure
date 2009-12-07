@@ -1201,8 +1201,6 @@
          (let [~form temp#]
            ~@body)))))
 
-(def *orig-frames* *create-lexical-frames*)
-(def *create-lexical-frames* false)
 (defn push-thread-bindings
   "WARNING: This is a low-level function. Prefer high-level macros like
   binding where ever possible.
@@ -1224,8 +1222,6 @@
   pop bindings without pushing before."
   []
   (clojure.lang.Var/popThreadBindings))
-
-(def *create-lexical-frames* *orig-frames*)
 
 (defn get-thread-bindings
   "Get a map with the Var/value pairs which is currently in effect for the
@@ -4627,6 +4623,4 @@
         (if items
           (recur (conj ret (first items)) (next items))
           ret)))))
-
-(println "*create-lexical-frames* is " *create-lexical-frames*)
 
