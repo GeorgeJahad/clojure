@@ -6,7 +6,9 @@
 ;   the terms of this license.
 ;   You must not remove this notice, or any other, from this software.
 
-(ns clojure.core)
+(ns #^{:doc "The core Clojure language."
+       :author "Rich Hickey"}
+  clojure.core)
 
 (def unquote)
 (def unquote-splicing)
@@ -112,6 +114,11 @@
  #^{:arglists '([x])
     :doc "Return true if x implements ISeq"}
  seq? (fn seq? [x] (instance? clojure.lang.ISeq x)))
+
+(def
+ #^{:arglists '([x])
+    :doc "Return true if x is a Character"}
+ char? (fn char? [x] (instance? Character x)))
 
 (def
  #^{:arglists '([x])
@@ -225,7 +232,16 @@
               fdecl (if (map? (last fdecl))
                       (butlast fdecl)
                       fdecl)
-              m (conj {:arglists (list 'quote (sigs fdecl))} m)]
+              m (conj {:arglists (list 'quote (sigs fdecl))} m)
+              m (let [inline (:inline m)
+                      ifn (first inline)
+                      iname (second inline)]
+                  ;; same as: (if (and (= 'fn ifn) (not (symbol? iname))) ...)
+                  (if (if (clojure.lang.Util/equiv 'fn ifn)
+                        (if (instance? clojure.lang.Symbol iname) false true))
+                    ;; inserts the same fn name to the inline fn if it does not have one
+                    (assoc m :inline (cons ifn (cons name (next inline))))
+                    m))]
           (list 'def (with-meta name (conj (if (meta name) (meta name) {}) m))
                 (cons `fn fdecl)))))
 
@@ -1135,7 +1151,7 @@
 (defmacro defmethod
   "Creates and installs a new method of multimethod associated with dispatch-value. "
   [multifn dispatch-val & fn-tail]
-  `(. ~multifn addMethod ~dispatch-val (fn ~@fn-tail)))
+  `(. ~(with-meta multifn {:tag 'clojure.lang.MultiFn}) addMethod ~dispatch-val (fn ~@fn-tail)))
 
 (defn remove-method
   "Removes the method of multimethod associated	with dispatch-value."
@@ -1955,10 +1971,9 @@
   "Returns the lines of text from rdr as a lazy sequence of strings.
   rdr must implement java.io.BufferedReader."
   [#^java.io.BufferedReader rdr]
-  (lazy-seq
-   (let [line  (. rdr (readLine))]
-     (when line
-       (cons line (line-seq rdr))))))
+  (let [line  (. rdr (readLine))]
+    (when line
+      (lazy-seq (cons line (line-seq rdr))))))
 
 (defn comparator
   "Returns an implementation of java.util.Comparator based upon pred."
@@ -2930,7 +2945,7 @@
                        conds (when (and (next body) (map? (first body))) 
                                            (first body))
                        body (if conds (next body) body)
-                       conds (or conds ^params)
+                       conds (or conds (meta params))
                        pre (:pre conds)
                        post (:post conds)                       
                        body (if post
@@ -3159,7 +3174,7 @@
   "test [v] finds fn at key :test in var metadata and calls it,
   presuming failure will throw exception"
   [v]
-    (let [f (:test ^v)]
+    (let [f (:test (meta v))]
       (if f
         (do (f) :ok)
         :no-test)))
@@ -3198,11 +3213,10 @@
   using java.util.regex.Matcher.find(), each such match processed with
   re-groups."
   [#^java.util.regex.Pattern re s]
-    (let [m (re-matcher re s)]
-      ((fn step []
-         (lazy-seq
-          (when (. m (find))
-            (cons (re-groups m) (step))))))))
+  (let [m (re-matcher re s)]
+    ((fn step []
+       (when (. m (find))
+         (lazy-seq (cons (re-groups m) (step))))))))
 
 (defn re-matches
   "Returns the match, if any, of string to pattern, using
@@ -3242,11 +3256,11 @@
 
 (defn print-doc [v]
   (println "-------------------------")
-  (println (str (ns-name (:ns ^v)) "/" (:name ^v)))
-  (prn (:arglists ^v))
-  (when (:macro ^v)
+  (println (str (ns-name (:ns (meta v))) "/" (:name (meta v))))
+  (prn (:arglists (meta v)))
+  (when (:macro (meta v))
     (println "Macro"))
-  (println " " (:doc ^v)))
+  (println " " (:doc (meta v))))
 
 (defn find-doc
   "Prints documentation for any var whose documentation or name
@@ -3255,9 +3269,9 @@
     (let [re  (re-pattern re-string-or-pattern)]
       (doseq [ns (all-ns)
               v (sort-by (comp :name meta) (vals (ns-interns ns)))
-              :when (and (:doc ^v)
-                         (or (re-find (re-matcher re (:doc ^v)))
-                             (re-find (re-matcher re (str (:name ^v))))))]
+              :when (and (:doc (meta v))
+                         (or (re-find (re-matcher re (:doc (meta v))))
+                             (re-find (re-matcher re (str (:name (meta v)))))))]
                (print-doc v))))
 
 (defn special-form-anchor
@@ -3285,7 +3299,7 @@
   [nspace]
   (println "-------------------------")
   (println (str (ns-name nspace)))
-  (println " " (:doc ^nspace)))
+  (println " " (:doc (meta nspace))))
 
 (defmacro doc
   "Prints documentation for a var or special form given its name"
@@ -3472,8 +3486,13 @@
   [f] (lazy-seq (cons (f) (repeatedly f))))
 
 (defn add-classpath
-  "Adds the url (String or URL object) to the classpath per URLClassLoader.addURL"
-  [url] (. clojure.lang.RT addURL url))
+  "DEPRECATED 
+
+  Adds the url (String or URL object) to the classpath per
+  URLClassLoader.addURL"
+  [url]
+  (println "WARNING: add-classpath is deprecated")
+  (clojure.lang.RT/addURL url))
 
 
 
@@ -3493,7 +3512,7 @@
   (let [[pre-args [args expr]] (split-with (comp not vector?) decl)]
     `(do
        (defn ~name ~@pre-args ~args ~(apply (eval (list `fn args expr)) args))
-       (alter-meta! (var ~name) assoc :inline (fn ~args ~expr))
+       (alter-meta! (var ~name) assoc :inline (fn ~name ~args ~expr))
        (var ~name))))
 
 (defn empty
@@ -3534,6 +3553,34 @@
   ([size-or-seq] (. clojure.lang.Numbers float_array size-or-seq))
   ([size init-val-or-seq] (. clojure.lang.Numbers float_array size init-val-or-seq)))
 
+(defn boolean-array
+  "Creates an array of booleans"
+  {:inline (fn [& args] `(. clojure.lang.Numbers boolean_array ~@args))
+   :inline-arities #{1 2}}
+  ([size-or-seq] (. clojure.lang.Numbers boolean_array size-or-seq))
+  ([size init-val-or-seq] (. clojure.lang.Numbers boolean_array size init-val-or-seq)))
+
+(defn byte-array
+  "Creates an array of bytes"
+  {:inline (fn [& args] `(. clojure.lang.Numbers byte_array ~@args))
+   :inline-arities #{1 2}}
+  ([size-or-seq] (. clojure.lang.Numbers byte_array size-or-seq))
+  ([size init-val-or-seq] (. clojure.lang.Numbers byte_array size init-val-or-seq)))
+
+(defn char-array
+  "Creates an array of chars"
+  {:inline (fn [& args] `(. clojure.lang.Numbers char_array ~@args))
+   :inline-arities #{1 2}}
+  ([size-or-seq] (. clojure.lang.Numbers char_array size-or-seq))
+  ([size init-val-or-seq] (. clojure.lang.Numbers char_array size init-val-or-seq)))
+
+(defn short-array
+  "Creates an array of shorts"
+  {:inline (fn [& args] `(. clojure.lang.Numbers short_array ~@args))
+   :inline-arities #{1 2}}
+  ([size-or-seq] (. clojure.lang.Numbers short_array size-or-seq))
+  ([size init-val-or-seq] (. clojure.lang.Numbers short_array size init-val-or-seq)))
+
 (defn double-array
   "Creates an array of doubles"
   {:inline (fn [& args] `(. clojure.lang.Numbers double_array ~@args))
@@ -3549,11 +3596,27 @@
   ([size init-val-or-seq] (. clojure.lang.Numbers int_array size init-val-or-seq)))
 
 (defn long-array
-  "Creates an array of ints"
+  "Creates an array of longs"
   {:inline (fn [& args] `(. clojure.lang.Numbers long_array ~@args))
    :inline-arities #{1 2}}
   ([size-or-seq] (. clojure.lang.Numbers long_array size-or-seq))
   ([size init-val-or-seq] (. clojure.lang.Numbers long_array size init-val-or-seq)))
+
+(definline booleans
+  "Casts to boolean[]"
+  [xs] `(. clojure.lang.Numbers booleans ~xs))
+
+(definline bytes
+  "Casts to bytes[]"
+  [xs] `(. clojure.lang.Numbers bytes ~xs))
+
+(definline chars
+  "Casts to chars[]"
+  [xs] `(. clojure.lang.Numbers chars ~xs))
+
+(definline shorts
+  "Casts to shorts[]"
+  [xs] `(. clojure.lang.Numbers shorts ~xs))
 
 (definline floats
   "Casts to float[]"
@@ -3790,9 +3853,8 @@
           row-struct (apply create-struct keys)
           row-values (fn [] (map (fn [#^Integer i] (. rs (getObject i))) idxs))
           rows (fn thisfn []
-                   (lazy-seq
-                    (when (. rs (next))
-                      (cons (apply struct row-struct (row-values)) (thisfn)))))]
+                 (when (. rs (next))
+                   (lazy-seq (cons (apply struct row-struct (row-values)) (thisfn)))))]
       (rows)))
 
 (defn iterator-seq
@@ -4252,11 +4314,11 @@
   metadata from the name symbol.  Returns the var."
   ([ns #^clojure.lang.Symbol name]
      (let [v (clojure.lang.Var/intern (the-ns ns) name)]
-       (when ^name (.setMeta v ^name))
+       (when (meta name) (.setMeta v (meta name)))
        v))
   ([ns name val]
      (let [v (clojure.lang.Var/intern (the-ns ns) name val)]
-       (when ^name (.setMeta v ^name))
+       (when (meta name) (.setMeta v (meta name)))
        v)))
 
 (defmacro while
