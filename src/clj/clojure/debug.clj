@@ -80,7 +80,7 @@
 (defmacro deftest-debug
   [test-name & deftest-stuff]
   `(with-lexical-frames
-     (deftest ~test-name ~@deftest-stuff)))
+     (clojure.test/deftest ~test-name ~@deftest-stuff)))
 
 (defmacro defmacro-debug
   [macro-name & defmacro-stuff]
